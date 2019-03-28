@@ -9,17 +9,15 @@ library(scales)
 library(reshape2)
 library(proxy)
 library(MLmetrics)
+library(BBmisc)
 ```
 ```{r}
-tickers <- c("VOO",
-             "QQQ",
+tickers <- c("QQQ",
              "GLD",
              "EEM",
              "VTI",
-             "IVV",
              "VEA",
              "GDX",
-             "EFA",
              "XLF"
              )
 tickers <- sort(tickers)
@@ -69,8 +67,8 @@ tail(train.df)
 head(test.df)
 ```
 ```{r}
-fh.train.df <- train.df[1:6]
-sh.train.cols <- c(1, 7:11)
+fh.train.df <- train.df[1:4]
+sh.train.cols <- c(1, 5:length(colnames(df)))
 sh.train.df <- train.df[sh.train.cols]
 
 melted.fh.train.df <- melt(fh.train.df, id="date")
@@ -80,10 +78,9 @@ melted.train.prices.df <- melt(train.prices.df, id="date")
 tail(train.prices.df)
 ```
 ```{r}
-head(train.prices.df)
 date <- train.prices.df[, 1]
 
-div.prices.df <- data.frame(lapply(train.prices.df[, 2:11], function(x) x/x[1]))
+div.prices.df <- data.frame(lapply(train.prices.df[, 2:length(colnames(df))], function(x) x/x[1]))
 div.prices.df <- cbind(date, div.prices.df)
 melted.div.prices.df <- melt(div.prices.df, id="date")
 tail(div.prices.df)
@@ -121,55 +118,51 @@ scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan
 ggsave("etf_perf_train_norm.pdf", width=8, height=4)
 ```
 ```{r}
-etfs <- names(div.prices.df[, 2:11])
-setdiff(etfs, "EFA")
-
-multiplyColumns <- function(name1, name2, df){
-    (df[, name1] - df[, name2])^2
-}
-
-combinations <- expand.grid(names(div.prices.df[, 2:11]), names(div.prices.df[, 2:11]), stringsAsFactors = FALSE)
-names4result <- paste(combinations[,1], combinations[,2], sep = "_")
-
-combinations[,1]
-
-result <- as.data.frame(mapply(multiplyColumns, combinations[,1], combinations[,2], div.prices.df[, 2:11]))
-names(result) <- names4result
-result
-```
-```{r}
-distances <- proxy::dist(div.prices.df[, 2:11], method = "euclidean", by_rows = F)
-distances
-```
-```{r}
-a <- c(2, 3, 4)
-b <- c(5, 4, 3)
-c <- c(1, 2, 3)
-
-test <- data.frame(a, b, c)
-test
-test.dist <- proxy::dist(test, method = "manhattan", by_rows = F)
-test.dist
-sapply(test, y = test$a, function(x, y) MSE(x, y))
-qq <- mapply(MSE, test$a, test$b) / length(test)
-sum(qq)/length(test)
-```
-```{r}
-norm.prices.df <- div.prices.df[, 2:11]
+norm.prices.df <- div.prices.df[, 2:length(colnames(df))]
 distances <- data.frame(rbind(sapply(norm.prices.df, y = norm.prices.df$EEM, function(x, y) MSE(x, y))))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$EFA, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GDX, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GLD, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$IVV, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$QQQ, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VEA, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VOO, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VTI, function(x, y) MSE(x, y)))
 distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$XLF, function(x, y) MSE(x, y)))
 dist.matrix <- distances
 rownames(dist.matrix) <- colnames(dist.matrix)
 dist.matrix[upper.tri(dist.matrix,diag=T)] <- NA
-dist.matrix <- dist.matrix[2:10, 1:9]
-dist.matrix
+dist.matrix <- dist.matrix[2:length(rownames(dist.matrix)), 1:length(rownames(dist.matrix))-1]
+max(dist.matrix, na.rm=T)
 min(dist.matrix, na.rm=T)
+dist.matrix
+dist.matrix <- cbind(var2 = rownames(dist.matrix), dist.matrix)
+melted.dist.mat <- melt(dist.matrix, na.rm = T)
+melted.dist.mat$value <- rescale(melted.dist.mat$value, to=c(0,1))
+```
+```{r, fig.width=7, fig.height=4}
+ggplot(data = melted.dist.mat, aes(x=var2, y=variable, fill=value)) + 
+  geom_tile(color = "white") + geom_text(aes(var2, variable, label = value), color = "black", size = 2, parse = T) +
+  xlab("ETF") + ylab("ETF") + theme_minimal() + scale_fill_gradient(low = "lightblue", high = "red", name="Distance") +
+  ggtitle("ETF Distance Matrix")
+ggsave("dist_matrix.pdf", width=7, height=4)
+```
+```{r}
+hist.mean <- function(x, y) {
+  return(mean(x - y))
+}
+
+sample.variance <- function(x, y) {
+  return(MSE(x, y) - (hist.mean(x, y))^2)
+}
+
+hist.std <- function(x, y) {
+  return(sqrt(sample.variance(x, y)))
+}
+
+a <- c(2, 3, 4)
+b <- c(5, 4, 3)
+c <- c(1, 2, 3)
+test <- data.frame(a, b, c)
+MSE(test$b, test$c)
+hist.mean(test$b, test$c)
+sample.variance(test$b, test$c)
+hist.std(test$b, test$c)
 ```
