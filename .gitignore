@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.html
 *.pdf
+.RData
 .directory
 
 .Rhistory

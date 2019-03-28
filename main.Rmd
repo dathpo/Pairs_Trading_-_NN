@@ -4,10 +4,122 @@ output: html_notebook
 ---
 ```{r}
 library(quantmod)
+library(ggplot2)
+library(scales)
+library(reshape2)
 ```
 ```{r}
+tickers <- c("VOO",
+             "QQQ",
+             "GLD",
+             "EEM",
+             "VTI",
+             "IVV",
+             "VEA",
+             "GDX",
+             "EFA",
+             "XLF"
+             )
+tickers <- sort(tickers)
+ticker.returns = lapply(tickers, function(tickers) {
+  dailyReturn(na.omit(getSymbols(tickers,
+                                   src="yahoo",
+                                   from="2011-01-01",
+                                   to="2019-01-01",
+                                   auto.assign=FALSE)))
+})
 
+df <- as.data.frame(do.call(merge.xts, ticker.returns))
+names(df) <- tickers
+df <- cbind(date = rownames(df), df)
+dim(df)
+any(is.na(df))
 ```
 ```{r}
+ticker.prices = lapply(tickers, function(tickers) {
+  getSymbols(tickers,
+             src="yahoo",
+             from="2011-01-01",
+             to="2019-01-01",
+             auto.assign=FALSE)
+})
+prices.df <- as.data.frame(do.call(merge.xts, lapply(ticker.prices, Cl)))
+names(prices.df) <- tickers
+prices.df <- cbind(date = rownames(prices.df), prices.df)
+dim(df)
+any(is.na(prices.df))
+```
+```{r}
+head(df)
+tail(df)
+```
+```{r}
+train.index <- round(0.7505 * nrow(df))
+train.df <- df[1:train.index,]
+test.df <- df[-(1:train.index),]
 
+train.prices.df <- prices.df[1:train.index,]
+test.prices.df <- prices.df[-(1:train.index),]
+
+nrow(train.df)
+nrow(test.df)
+tail(train.df)
+head(test.df)
+```
+```{r}
+fh.train.df <- train.df[1:6]
+sh.train.cols <- c(1, 7:11)
+sh.train.df <- train.df[sh.train.cols]
+
+melted.fh.train.df <- melt(fh.train.df, id="date")
+melted.sh.train.df <- melt(sh.train.df, id="date")
+
+melted.train.prices.df <- melt(train.prices.df, id="date")
+tail(train.prices.df)
+```
+```{r}
+head(train.prices.df)
+date <- train.prices.df[, 1]
+
+div.prices.df <- data.frame(lapply(train.prices.df[, 2:11], function(x) x/x[1]))
+div.prices.df <- cbind(date, div.prices.df)
+melted.div.prices.df <- melt(div.prices.df, id="date")
+tail(div.prices.df)
+
+diff.prices.df <- data.frame(lapply(train.prices.df[, 2:11], function(x) x-x[1]))
+diff.prices.df <- cbind(date, diff.prices.df)
+melted.diff.prices.df <- melt(diff.prices.df, id="date")
+tail(diff.prices.df)
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=melted.fh.train.df, aes(x=as.Date(melted.fh.train.df$date), y=melted.fh.train.df$value,
+                           group=melted.fh.train.df$variable, color=melted.fh.train.df$variable)) +
+geom_line(alpha=0.7) +
+xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 1") +
+ggsave("etf_rets_train_pt1.pdf", width=8, height=4)
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=melted.sh.train.df, aes(x=as.Date(melted.sh.train.df$date), y=melted.sh.train.df$value,
+                           group=melted.sh.train.df$variable, color=melted.sh.train.df$variable)) +
+geom_line(alpha=0.7) +
+xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 2") +
+ggsave("etf_rets_train_pt2.pdf", width=8, height=4)
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=melted.train.prices.df, aes(x=as.Date(melted.train.prices.df$date), y=melted.train.prices.df$value,
+                           group=melted.train.prices.df$variable, color=melted.train.prices.df$variable)) +
+geom_line() +
+xlab("Date") + ylab("Price ($)") +
+scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan 2011 - Dec 2016)") +
+ggsave("etf_perf_train.pdf", width=8, height=4)
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=melted.div.prices.df, aes(x=as.Date(melted.div.prices.df$date), y=melted.div.prices.df$value,
+                           group=melted.div.prices.df$variable, color=melted.div.prices.df$variable)) +
+geom_line() +
+xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan 2011 - Dec 2016) - Normalised") +
+ggsave("etf_perf_train_norm.pdf", width=8, height=4)
 ```
