@@ -118,14 +118,34 @@ scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan
 ggsave("etf_perf_train_norm.pdf", width=8, height=4)
 ```
 ```{r}
+spread <- function(x, y) {
+  return(x - y)
+}
+
+ssd <- function (x, y) {
+  return(mean(spread(x, y)^2))
+}
+
+hist.mean <- function(x, y) {
+  return(mean(x - y))
+}
+
+sample.variance <- function(x, y) {
+  return(ssd(x, y) - (hist.mean(x, y))^2)
+}
+
+hist.std <- function(x, y) {
+  return(sqrt(sample.variance(x, y)))
+}
+
 norm.prices.df <- div.prices.df[, 2:length(colnames(df))]
-distances <- data.frame(rbind(sapply(norm.prices.df, y = norm.prices.df$EEM, function(x, y) MSE(x, y))))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GDX, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GLD, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$QQQ, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VEA, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VTI, function(x, y) MSE(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$XLF, function(x, y) MSE(x, y)))
+distances <- data.frame(rbind(sapply(norm.prices.df, y = norm.prices.df$EEM, function(x, y) ssd(x, y))))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GDX, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GLD, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$QQQ, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VEA, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VTI, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$XLF, function(x, y) ssd(x, y)))
 dist.matrix <- distances
 rownames(dist.matrix) <- colnames(dist.matrix)
 dist.matrix[upper.tri(dist.matrix,diag=T)] <- NA
@@ -145,23 +165,12 @@ ggplot(data = melted.dist.mat, aes(x=var2, y=variable, fill=value)) +
 ggsave("dist_matrix.pdf", width=7, height=4)
 ```
 ```{r}
-hist.mean <- function(x, y) {
-  return(mean(x - y))
-}
-
-sample.variance <- function(x, y) {
-  return(MSE(x, y) - (hist.mean(x, y))^2)
-}
-
-hist.std <- function(x, y) {
-  return(sqrt(sample.variance(x, y)))
-}
-
 a <- c(2, 3, 4)
 b <- c(5, 4, 3)
 c <- c(1, 2, 3)
 test <- data.frame(a, b, c)
-MSE(test$b, test$c)
+spread(test$b, test$c)
+ssd(test$b, test$c)
 hist.mean(test$b, test$c)
 sample.variance(test$b, test$c)
 hist.std(test$b, test$c)
