@@ -7,6 +7,8 @@ library(quantmod)
 library(ggplot2)
 library(scales)
 library(reshape2)
+library(proxy)
+library(MLmetrics)
 ```
 ```{r}
 tickers <- c("VOO",
@@ -85,11 +87,6 @@ div.prices.df <- data.frame(lapply(train.prices.df[, 2:11], function(x) x/x[1]))
 div.prices.df <- cbind(date, div.prices.df)
 melted.div.prices.df <- melt(div.prices.df, id="date")
 tail(div.prices.df)
-
-diff.prices.df <- data.frame(lapply(train.prices.df[, 2:11], function(x) x-x[1]))
-diff.prices.df <- cbind(date, diff.prices.df)
-melted.diff.prices.df <- melt(diff.prices.df, id="date")
-tail(diff.prices.df)
 ```
 ```{r, fig.width=11, fig.height=4}
 ggplot(data=melted.fh.train.df, aes(x=as.Date(melted.fh.train.df$date), y=melted.fh.train.df$value,
@@ -122,4 +119,57 @@ geom_line() +
 xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
 scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan 2011 - Dec 2016) - Normalised") +
 ggsave("etf_perf_train_norm.pdf", width=8, height=4)
+```
+```{r}
+etfs <- names(div.prices.df[, 2:11])
+setdiff(etfs, "EFA")
+
+multiplyColumns <- function(name1, name2, df){
+    (df[, name1] - df[, name2])^2
+}
+
+combinations <- expand.grid(names(div.prices.df[, 2:11]), names(div.prices.df[, 2:11]), stringsAsFactors = FALSE)
+names4result <- paste(combinations[,1], combinations[,2], sep = "_")
+
+combinations[,1]
+
+result <- as.data.frame(mapply(multiplyColumns, combinations[,1], combinations[,2], div.prices.df[, 2:11]))
+names(result) <- names4result
+result
+```
+```{r}
+distances <- proxy::dist(div.prices.df[, 2:11], method = "euclidean", by_rows = F)
+distances
+```
+```{r}
+a <- c(2, 3, 4)
+b <- c(5, 4, 3)
+c <- c(1, 2, 3)
+
+test <- data.frame(a, b, c)
+test
+test.dist <- proxy::dist(test, method = "manhattan", by_rows = F)
+test.dist
+sapply(test, y = test$a, function(x, y) MSE(x, y))
+qq <- mapply(MSE, test$a, test$b) / length(test)
+sum(qq)/length(test)
+```
+```{r}
+norm.prices.df <- div.prices.df[, 2:11]
+distances <- data.frame(rbind(sapply(norm.prices.df, y = norm.prices.df$EEM, function(x, y) MSE(x, y))))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$EFA, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GDX, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GLD, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$IVV, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$QQQ, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VEA, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VOO, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VTI, function(x, y) MSE(x, y)))
+distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$XLF, function(x, y) MSE(x, y)))
+dist.matrix <- distances
+rownames(dist.matrix) <- colnames(dist.matrix)
+dist.matrix[upper.tri(dist.matrix,diag=T)] <- NA
+dist.matrix <- dist.matrix[2:10, 1:9]
+dist.matrix
+min(dist.matrix, na.rm=T)
 ```
