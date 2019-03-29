@@ -115,7 +115,7 @@ ggplot(data=melted.div.prices.df, aes(x=as.Date(melted.div.prices.df$date), y=me
 geom_line() +
 xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
 scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan 2011 - Dec 2016) - Normalised") +
-ggsave("etf_perf_train_norm.pdf", width=8, height=4)
+ggsave("etf_perf_train_norms.jpg", width=8, height=4)
 ```
 ```{r}
 spread <- function(x, y) {
@@ -164,14 +164,75 @@ ggplot(data = melted.dist.mat, aes(x=var2, y=variable, fill=value)) +
   ggtitle("ETF Distance Matrix")
 ggsave("dist_matrix.pdf", width=7, height=4)
 ```
+```{r, fig.width=11, fig.height=4}
+pair.prices.df <- data.frame(train.prices.df$EEM, train.prices.df$GLD)
+pair.prices.df <- data.frame(lapply(pair.prices.df, function(x) x/x[1]))
+eem.gld.spread <- spread(pair.prices.df$train.prices.df.EEM, pair.prices.df$train.prices.df.GLD)
+gld.eem.spread <- spread(pair.prices.df$train.prices.df.GLD, pair.prices.df$train.prices.df.EEM)
+pair.prices.df <- cbind(pair.prices.df, train.prices.df$date, eem.gld.spread, gld.eem.spread)
+colnames(pair.prices.df) <- c("EEM", "GLD", "date", "S(EEM, GLD)", "S(GLD, EEM)")
+pair.prices.df <- data.frame(pair.prices.df$date, pair.prices.df$EEM, pair.prices.df$GLD, pair.prices.df$`S(GLD, EEM)`)
+colnames(pair.prices.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)")
+# pair.pos <- spread(div.prices.df$GLD, div.prices.df$EEM) >= hist.mean(div.prices.df$GLD, div.prices.df$EEM) + (0.0*hist.std(div.prices.df$GLD, div.prices.df$EEM))
+# pair.pos <- pair.pos * 0.25
+eem.long <- spread(div.prices.df$GLD, div.prices.df$EEM) >= 0
+gld.long <- spread(div.prices.df$GLD, div.prices.df$EEM) <= 0 
+eem.long <- eem.long * 0.5
+eem.long <- eem.long - 0.25
+gld.long <- gld.long * 0.5
+gld.long <- gld.long - 0.25
+pair.prices.df <- cbind(pair.prices.df, eem.long, gld.long)
+colnames(pair.prices.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD")
+melted.pair <- melt(pair.prices.df, id="date")
+
+ggplot(data=melted.pair, aes(x=as.Date(melted.pair$date), y=melted.pair$value,
+                           group=melted.pair$variable, color=melted.pair$variable)) +
+geom_line() +
+xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised")
+ggsave("pair_perf_train_norm.pdf", width=8, height=4)
+```
 ```{r}
-a <- c(2, 3, 4)
-b <- c(5, 4, 3)
-c <- c(1, 2, 3)
+tail(pair.prices.df)
+```
+```{r, fig.width=11, fig.height=4}
+spread.df <- data.frame(pair.prices.df$date, pair.prices.df$`S(GLD, EEM)`)
+colnames(spread.df) <- c("date", "S(GLD, EEM)")
+melted.spread <- melt(spread.df, id="date")
+ggplot(data=melted.spread, aes(x=as.Date(melted.spread$date), y=melted.spread$value,
+                           group=melted.spread$variable, color=melted.spread$variable)) +
+  geom_line() +
+xlab("Date") + ylab("Distance") + scale_y_continuous(labels=percent) +
+scale_color_discrete("ETF") + ggtitle("Spread between EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016)")
+ggsave("spread.pdf", width=8, height=4)
+```
+
+```{r}
+a <- c(2, 3, 4, 3, 3)
+b <- c(5, 4, 3, 4, 6)
+c <- c(1, 2, 3, 3, 3)
 test <- data.frame(a, b, c)
 spread(test$b, test$c)
 ssd(test$b, test$c)
 hist.mean(test$b, test$c)
 sample.variance(test$b, test$c)
 hist.std(test$b, test$c)
+
+plot(spread(test$b, test$a))
+spread(test$a, test$b) >= hist.mean(test$a, test$b) + (2*hist.std(test$a, test$b)) 
+hist.mean(test$a, test$b) + (2*hist.std(test$a, test$b)) 
+spread(test$a, test$b) <= hist.mean(test$a, test$b) - (2*hist.std(test$a, test$b)) 
+hist.mean(test$a, test$b) - (2*hist.std(test$a, test$b)) 
+
+spread(div.prices.df$EEM, div.prices.df$GLD)
+spread(div.prices.df$EEM, div.prices.df$GLD) >= hist.mean(div.prices.df$EEM, div.prices.df$GLD) + (2*hist.std(div.prices.df$EEM, div.prices.df$GLD)) 
+hist.mean(div.prices.df$EEM, div.prices.df$GLD) + (2*hist.std(div.prices.df$EEM, div.prices.df$GLD)) 
+spread(div.prices.df$EEM, div.prices.df$GLD) <= hist.mean(div.prices.df$EEM, div.prices.df$GLD) - (2*hist.std(div.prices.df$EEM, div.prices.df$GLD))
+hist.mean(div.prices.df$EEM, div.prices.df$GLD) - (2*hist.std(div.prices.df$EEM, div.prices.df$GLD)) 
+
+spread(div.prices.df$GLD, div.prices.df$EEM) >= hist.mean(div.prices.df$GLD, div.prices.df$EEM) + (0.1*hist.std(div.prices.df$GLD, div.prices.df$EEM)) 
+spread(div.prices.df$GLD, div.prices.df$EEM) <= hist.mean(div.prices.df$GLD, div.prices.df$EEM) - (2*hist.std(div.prices.df$GLD, div.prices.df$EEM))
+```
+```{r}
+
 ```
