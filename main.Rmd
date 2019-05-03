@@ -193,26 +193,23 @@ colnames(pair.train.prices.spread.df) <- c("date", "S(GLD, EEM)")
 # pair.pos <- pair.pos * 0.25
 train.eem.long <- spread(div.train.prices.df$GLD, div.train.prices.df$EEM) >= 0
 train.gld.long <- spread(div.train.prices.df$GLD, div.train.prices.df$EEM) <= 0 
-# train.eem.long <- train.eem.long * 0.5
-# train.eem.long <- train.eem.long - 0.25
-# train.gld.long <- train.gld.long * 0.5
-# train.gld.long <- train.gld.long - 0.25
+
 pair.train.prices.pos.df <- data.frame(train.prices.df$date, train.eem.long, train.gld.long)
 colnames(pair.train.prices.pos.df) <- c("date", "Long EEM", "Long GLD")
 
 final.df <- data.frame(train.prices.df$date, pair.train.prices.df$EEM, pair.train.prices.df$GLD, gld.eem.train.spread, train.eem.long, train.gld.long)
-colnames(final.df) <- c("date", "EEM", "GLD", "spread", "Long_EEM", "Long_GLD")
+colnames(final.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD")
 # colnames(final.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD")
 melted.final <- melt(final.df, id="date")
-gathered <- gather(final.df, key="measure", value="value", c("EEM", "GLD", "spread", "Long_EEM", "Long_GLD"))
+gathered <- gather(final.df, key="measure", value="value", c("EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD"))
 
 melted.train.pair <- melt(pair.train.prices.df, id="date")
 melted.train.pair.pos <- melt(pair.train.prices.pos.df, id="date")
 ```
 ```{r, fig.width=11, fig.height=4}
-melted.final$var <- ifelse(melted.final$variable == "EEM" | melted.final$variable == "GLD", "ETFs", ifelse(melted.final$variable == "spread", "Spread", "Position"))
+melted.final$var <- ifelse(melted.final$variable == "EEM" | melted.final$variable == "GLD", "ETF Pair", ifelse(melted.final$variable == "S(GLD, EEM)", "Pair Spread", "Position"))
 
-ggplot(data=melted.final, aes(x=as.Date(date), y=value, group=variable, color=variable)) + geom_line() + xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised") + facet_grid(var~., scale='free_y')
+ggplot(data=melted.final, aes(x=as.Date(date), y=value, group=variable, color=variable)) + geom_line() + xlab("Date") + ylab("") + scale_y_continuous(labels=percent) + scale_color_discrete("Legend") + ggtitle("ETF Pair EEM-GLD Performance, Spread and Trading Positions over Training Period") + facet_grid(var~., scale='free_y')
 ```
 ```{r, fig.width=11, fig.height=4}
 plot.pair <- ggplot(data=melted.train.pair, aes(x=as.Date(melted.train.pair$date), y=melted.train.pair$value, group=melted.train.pair$variable, color=melted.train.pair$variable)) + geom_line() + xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised")
