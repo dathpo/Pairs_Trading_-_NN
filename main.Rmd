@@ -6,7 +6,9 @@ output: html_notebook
 library(quantmod)
 library(ggplot2)
 library(scales)
+library(neuralnet)
 library(reshape2)
+library(tidyr)
 library(proxy)
 library(MLmetrics)
 library(BBmisc)
@@ -55,16 +57,22 @@ tail(df)
 ```
 ```{r}
 train.index <- round(0.7505 * nrow(df))
+
 train.df <- df[1:train.index,]
 test.df <- df[-(1:train.index),]
+
+# nrow(train.df)
+# nrow(test.df)
+# tail(train.df)
+# head(test.df)
 
 train.prices.df <- prices.df[1:train.index,]
 test.prices.df <- prices.df[-(1:train.index),]
 
-nrow(train.df)
-nrow(test.df)
-tail(train.df)
-head(test.df)
+nrow(train.prices.df)
+nrow(test.prices.df)
+tail(train.prices.df)
+head(test.prices.df)
 ```
 ```{r}
 fh.train.df <- train.df[1:4]
@@ -80,26 +88,27 @@ tail(train.prices.df)
 ```{r}
 date <- train.prices.df[, 1]
 
-div.prices.df <- data.frame(lapply(train.prices.df[, 2:length(colnames(df))], function(x) x/x[1]))
-div.prices.df <- cbind(date, div.prices.df)
-melted.div.prices.df <- melt(div.prices.df, id="date")
-tail(div.prices.df)
+div.train.prices.df <- data.frame(lapply(train.prices.df[, 2:length(colnames(df))], function(x) x/x[1]))
+div.train.prices.df <- cbind(date, div.train.prices.df)
+tail(div.train.prices.df)
+
+melted.div.train.prices.df <- melt(div.train.prices.df, id="date")
 ```
 ```{r, fig.width=11, fig.height=4}
-ggplot(data=melted.fh.train.df, aes(x=as.Date(melted.fh.train.df$date), y=melted.fh.train.df$value,
-                           group=melted.fh.train.df$variable, color=melted.fh.train.df$variable)) +
-geom_line(alpha=0.7) +
-xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
-scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 1") +
-ggsave("etf_rets_train_pt1.pdf", width=8, height=4)
+# ggplot(data=melted.fh.train.df, aes(x=as.Date(melted.fh.train.df$date), y=melted.fh.train.df$value,
+#                            group=melted.fh.train.df$variable, color=melted.fh.train.df$variable)) +
+# geom_line(alpha=0.7) +
+# xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+# scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 1") +
+# ggsave("etf_rets_train_pt1.pdf", width=8, height=4)
 ```
 ```{r, fig.width=11, fig.height=4}
-ggplot(data=melted.sh.train.df, aes(x=as.Date(melted.sh.train.df$date), y=melted.sh.train.df$value,
-                           group=melted.sh.train.df$variable, color=melted.sh.train.df$variable)) +
-geom_line(alpha=0.7) +
-xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
-scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 2") +
-ggsave("etf_rets_train_pt2.pdf", width=8, height=4)
+# ggplot(data=melted.sh.train.df, aes(x=as.Date(melted.sh.train.df$date), y=melted.sh.train.df$value,
+#                            group=melted.sh.train.df$variable, color=melted.sh.train.df$variable)) +
+# geom_line(alpha=0.7) +
+# xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
+# scale_color_discrete("ETF") + ggtitle("ETF Daily Returns over Training Period (Jan 2011 - Dec 2016), pt. 2") +
+# ggsave("etf_rets_train_pt2.pdf", width=8, height=4)
 ```
 ```{r, fig.width=11, fig.height=4}
 ggplot(data=melted.train.prices.df, aes(x=as.Date(melted.train.prices.df$date), y=melted.train.prices.df$value,
@@ -110,8 +119,8 @@ scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan
 ggsave("etf_perf_train.pdf", width=8, height=4)
 ```
 ```{r, fig.width=11, fig.height=4}
-ggplot(data=melted.div.prices.df, aes(x=as.Date(melted.div.prices.df$date), y=melted.div.prices.df$value,
-                           group=melted.div.prices.df$variable, color=melted.div.prices.df$variable)) +
+ggplot(data=melted.div.train.prices.df, aes(x=as.Date(melted.div.train.prices.df$date), y=melted.div.train.prices.df$value,
+                           group=melted.div.train.prices.df$variable, color=melted.div.train.prices.df$variable)) +
 geom_line() +
 xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
 scale_color_discrete("ETF") + ggtitle("ETF Performance over Training Period (Jan 2011 - Dec 2016) - Normalised") +
@@ -138,14 +147,20 @@ hist.std <- function(x, y) {
   return(sqrt(sample.variance(x, y)))
 }
 
-norm.prices.df <- div.prices.df[, 2:length(colnames(df))]
-distances <- data.frame(rbind(sapply(norm.prices.df, y = norm.prices.df$EEM, function(x, y) ssd(x, y))))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GDX, function(x, y) ssd(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$GLD, function(x, y) ssd(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$QQQ, function(x, y) ssd(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VEA, function(x, y) ssd(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$VTI, function(x, y) ssd(x, y)))
-distances <- rbind(distances, sapply(norm.prices.df, y = norm.prices.df$XLF, function(x, y) ssd(x, y)))
+unscale <- function(scaled.vector) {
+  unscaled.vector <- scaled.vector * attr(scaled.ret, 'scaled:scale') + attr(scaled.ret, 'scaled:center')
+  return(unscaled.vector)
+}
+
+norm.train.prices.df <- div.train.prices.df[, 2:length(colnames(df))]
+distances <- data.frame(rbind(sapply(norm.train.prices.df, y = norm.train.prices.df$EEM, function(x, y) ssd(x, y))))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$GDX, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$GLD, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$QQQ, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$VEA, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$VTI, function(x, y) ssd(x, y)))
+distances <- rbind(distances, sapply(norm.train.prices.df, y = norm.train.prices.df$XLF, function(x, y) ssd(x, y)))
+
 dist.matrix <- distances
 rownames(dist.matrix) <- colnames(dist.matrix)
 dist.matrix[upper.tri(dist.matrix,diag=T)] <- NA
@@ -164,49 +179,175 @@ ggplot(data = melted.dist.mat, aes(x=var2, y=variable, fill=value)) +
   ggtitle("ETF Distance Matrix")
 ggsave("dist_matrix.pdf", width=7, height=4)
 ```
-```{r, fig.width=11, fig.height=4}
-pair.prices.df <- data.frame(train.prices.df$EEM, train.prices.df$GLD)
-pair.prices.df <- data.frame(lapply(pair.prices.df, function(x) x/x[1]))
-eem.gld.spread <- spread(pair.prices.df$train.prices.df.EEM, pair.prices.df$train.prices.df.GLD)
-gld.eem.spread <- spread(pair.prices.df$train.prices.df.GLD, pair.prices.df$train.prices.df.EEM)
-pair.prices.df <- cbind(pair.prices.df, train.prices.df$date, eem.gld.spread, gld.eem.spread)
-colnames(pair.prices.df) <- c("EEM", "GLD", "date", "S(EEM, GLD)", "S(GLD, EEM)")
-pair.prices.df <- data.frame(pair.prices.df$date, pair.prices.df$EEM, pair.prices.df$GLD, pair.prices.df$`S(GLD, EEM)`)
-colnames(pair.prices.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)")
-# pair.pos <- spread(div.prices.df$GLD, div.prices.df$EEM) >= hist.mean(div.prices.df$GLD, div.prices.df$EEM) + (0.0*hist.std(div.prices.df$GLD, div.prices.df$EEM))
+```{r}
+pair.train.prices.df <- data.frame(train.prices.df$EEM, train.prices.df$GLD)
+colnames(pair.train.prices.df) <- c("EEM", "GLD")
+pair.train.prices.df <- data.frame(lapply(pair.train.prices.df, function(x) x/x[1]))
+eem.gld.train.spread <- spread(pair.train.prices.df$EEM, pair.train.prices.df$GLD)
+gld.eem.train.spread <- spread(pair.train.prices.df$GLD, pair.train.prices.df$EEM)
+pair.train.prices.df <- data.frame(train.prices.df$date, pair.train.prices.df$EEM, pair.train.prices.df$GLD)
+pair.train.prices.spread.df <- data.frame(train.prices.df$date, gld.eem.train.spread)
+colnames(pair.train.prices.df) <- c("date", "EEM", "GLD")
+colnames(pair.train.prices.spread.df) <- c("date", "S(GLD, EEM)")
+# pair.pos <- spread(div.train.prices.df$GLD, div.train.prices.df$EEM) >= hist.mean(div.train.prices.df$GLD, div.train.prices.df$EEM) + (0.0*hist.std(div.train.prices.df$GLD, div.train.prices.df$EEM))
 # pair.pos <- pair.pos * 0.25
-eem.long <- spread(div.prices.df$GLD, div.prices.df$EEM) >= 0
-gld.long <- spread(div.prices.df$GLD, div.prices.df$EEM) <= 0 
-eem.long <- eem.long * 0.5
-eem.long <- eem.long - 0.25
-gld.long <- gld.long * 0.5
-gld.long <- gld.long - 0.25
-pair.prices.df <- cbind(pair.prices.df, eem.long, gld.long)
-colnames(pair.prices.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD")
-melted.pair <- melt(pair.prices.df, id="date")
+train.eem.long <- spread(div.train.prices.df$GLD, div.train.prices.df$EEM) >= 0
+train.gld.long <- spread(div.train.prices.df$GLD, div.train.prices.df$EEM) <= 0 
+# train.eem.long <- train.eem.long * 0.5
+# train.eem.long <- train.eem.long - 0.25
+# train.gld.long <- train.gld.long * 0.5
+# train.gld.long <- train.gld.long - 0.25
+pair.train.prices.pos.df <- data.frame(train.prices.df$date, train.eem.long, train.gld.long)
+colnames(pair.train.prices.pos.df) <- c("date", "Long EEM", "Long GLD")
 
-ggplot(data=melted.pair, aes(x=as.Date(melted.pair$date), y=melted.pair$value,
-                           group=melted.pair$variable, color=melted.pair$variable)) +
-geom_line() +
-xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) +
-scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised")
+final.df <- data.frame(train.prices.df$date, pair.train.prices.df$EEM, pair.train.prices.df$GLD, gld.eem.train.spread, train.eem.long, train.gld.long)
+colnames(final.df) <- c("date", "EEM", "GLD", "spread", "Long_EEM", "Long_GLD")
+# colnames(final.df) <- c("date", "EEM", "GLD", "S(GLD, EEM)", "Long EEM", "Long GLD")
+melted.final <- melt(final.df, id="date")
+gathered <- gather(final.df, key="measure", value="value", c("EEM", "GLD", "spread", "Long_EEM", "Long_GLD"))
+
+melted.train.pair <- melt(pair.train.prices.df, id="date")
+melted.train.pair.pos <- melt(pair.train.prices.pos.df, id="date")
+```
+```{r, fig.width=11, fig.height=4}
+melted.final$var <- ifelse(melted.final$variable == "EEM" | melted.final$variable == "GLD", "ETFs", ifelse(melted.final$variable == "spread", "Spread", "Position"))
+
+ggplot(data=melted.final, aes(x=as.Date(date), y=value, group=variable, color=variable)) + geom_line() + xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised") + facet_grid(var~., scale='free_y')
+```
+```{r, fig.width=11, fig.height=4}
+plot.pair <- ggplot(data=melted.train.pair, aes(x=as.Date(melted.train.pair$date), y=melted.train.pair$value, group=melted.train.pair$variable, color=melted.train.pair$variable)) + geom_line() + xlab("Date") + ylab("Return") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised")
+
+plot.spread <- ggplot(data=pair.train.prices.spread.df, aes(x=as.Date(pair.train.prices.spread.df$date), y=pair.train.prices.spread.df$`S(GLD, EEM)`)) + geom_line() + xlab("Date") + ylab("Distance") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Spread between EEM and GLD ETFs")
+
+plot.pos <- ggplot(data=melted.train.pair.pos, aes(x=as.Date(melted.train.pair.pos$date), y=melted.train.pair.pos$value, group=melted.train.pair.pos$variable, color=melted.train.pair.pos$variable)) + geom_line() + xlab("Date") + ylab("Position") + scale_y_continuous(labels=percent) + scale_color_discrete("ETF") + ggtitle("Performance of EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016) - Normalised")
+
+plot_grid(plot.pair, plot.spread, plot.pos, labels = "AUTO", ncol = 1, align = 'v')
+
 ggsave("pair_perf_train_norm.pdf", width=8, height=4)
 ```
 ```{r}
-tail(pair.prices.df)
+tail(pair.train.prices.df)
 ```
 ```{r, fig.width=11, fig.height=4}
-spread.df <- data.frame(pair.prices.df$date, pair.prices.df$`S(GLD, EEM)`)
-colnames(spread.df) <- c("date", "S(GLD, EEM)")
-melted.spread <- melt(spread.df, id="date")
-ggplot(data=melted.spread, aes(x=as.Date(melted.spread$date), y=melted.spread$value,
-                           group=melted.spread$variable, color=melted.spread$variable)) +
-  geom_line() +
-xlab("Date") + ylab("Distance") + scale_y_continuous(labels=percent) +
-scale_color_discrete("ETF") + ggtitle("Spread between EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016)")
-ggsave("spread.pdf", width=8, height=4)
+# spread.train.df <- data.frame(pair.train.prices.df$date, pair.train.prices.df$`S(GLD, EEM)`)
+# colnames(spread.train.df) <- c("date", "S(GLD, EEM)")
+# melted.train.spread <- melt(spread.train.df, id="date")
+# ggplot(data=melted.train.spread, aes(x=as.Date(melted.train.spread$date), y=melted.train.spread$value,
+#                            group=melted.train.spread$variable, color=melted.train.spread$variable)) +
+#   geom_line() +
+# xlab("Date") + ylab("Distance") + scale_y_continuous(labels=percent) +
+# scale_color_discrete("ETF") + ggtitle("Spread between EEM and GLD ETFs over Training Period (Jan 2011 - Dec 2016)")
+# ggsave("spread.pdf", width=8, height=4)
 ```
+```{r}
+spread.df <- data.frame(prices.df$EEM, prices.df$GLD)
+spread.df <- data.frame(lapply(spread.df, function(x) x/x[1]))
+eem.gld.spread <- spread(spread.df$prices.df.EEM, spread.df$prices.df.GLD)
+gld.eem.spread <- spread(spread.df$prices.df.GLD, spread.df$prices.df.EEM)
 
+spread.df <- cbind(spread.df, as.Date(prices.df$date), eem.gld.spread, gld.eem.spread)
+colnames(spread.df) <- c("EEM", "GLD", "date", "S(EEM, GLD)", "S(GLD, EEM)")
+spread.df <- data.frame(spread.df$date, spread.df$`S(GLD, EEM)`)
+colnames(spread.df) <- c("date", "spread")
+spread.df
+```
+```{r}
+rownames(spread.df) <- spread.df$date
+spread.df <- subset(spread.df, select = c("spread"))
+spread.df <- data.frame(spread.df,
+                 x1=Lag(spread.df, 1),
+                 x2=Lag(spread.df, 2),
+                 x3=Lag(spread.df, 3),
+                 x4=Lag(spread.df, 4),
+                 x5=Lag(spread.df, 5),
+                 x6=Lag(spread.df, 6),
+                 x7=Lag(spread.df, 7),
+                 x8=Lag(spread.df, 8),
+                 x9=Lag(spread.df, 9),
+                 x10=Lag(spread.df, 10)
+)
+names(spread.df) <- c('y', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10')
+spread.df <- na.omit(spread.df)
+spread.df <- spread.df[, c(2:11, 1)]
+spread.df
+```
+```{r}
+spread.pair.train.df <- spread.df[1:train.index,]
+spread.pair.test.df <- spread.df[-(1:train.index),]
+
+nrow(spread.pair.train.df)
+nrow(spread.pair.test.df)
+tail(spread.pair.train.df)
+head(spread.pair.test.df)
+```
+```{r, fig.width=11, fig.height=4}
+plot.train.df <- cbind(date = as.Date(rownames(spread.pair.train.df)), spread.pair.train.df)
+plot.test.df <- cbind(date = as.Date(rownames(spread.pair.test.df)), spread.pair.test.df)
+ggplot() + 
+geom_line(data=plot.train.df, aes(x=plot.train.df$date, y=plot.train.df$y, colour="Training")) +
+geom_line(data=plot.test.df, aes(x=plot.test.df$date, y=plot.test.df$y, colour="Test")) +
+xlab("Time") + ylab("Distance") + scale_y_continuous(labels=percent) +
+  scale_colour_manual(name="Legend", values = c("#377EB8", "black")) +
+ggtitle("Spread between EEM and GLD ETFs (Jan 2011 - Jan 2019)")
+ggsave("spread_tra_test.pdf", width=8, height=4)
+```
+```{r}
+x.test <- spread.pair.test.df[, 1:(length(names(spread.pair.train.df))-1)]
+y.test <- spread.pair.test.df[, length(names(spread.pair.train.df))]
+y.train <- spread.pair.train.df[, length(names(spread.pair.train.df))]
+set.seed(42)
+net <- neuralnet(y~x1+x2+x3+x4+x5+x6+x7+x8+x9+x10,
+                 spread.pair.train.df,
+                 hidden = c(90, 60, 30),
+                 threshold = 0.01
+                 # stepmax = 1e+9,
+                 # rep = 5,
+                 # algorithm = "backprop", "rprop+", "rprop-", "sag", "slr",
+                 # err.fct = "sse", "ce",
+                 # act.fct = softplus
+                 # act.fct = "logistic", "tanh"
+                 # linear.output = TRUE
+)
+y.train.pred <- as.data.frame(net$net.result)
+colnames(y.train.pred) <- c("V1")
+net$result.matrix[1:3,]
+
+y.train.comp.df <- cbind(y.train, y.train.pred, y.train.pred-y.train, plot.train.df$date)
+colnames(y.train.comp.df) <- c("y_train", "y_pred", "nn_residual", "date")
+
+pred <- neuralnet::compute(net, x.test)
+y.test.pred <- as.data.frame(pred$net.result)
+y.test.comp.df <- cbind(y.test, y.test.pred, y.test.pred-y.test, plot.test.df$date)
+colnames(y.test.comp.df) <- c("y_test", "y_pred", "nn_residual", "date")
+
+cat("\nNeural Network Accuracy - Training Set:")
+cat("\nMAE:", MLmetrics::MAE(y.train.pred$V1, y.train))
+cat("\nRMSE:", MLmetrics::RMSE(y.train.pred$V1, y.train))
+cat("\nMAPE:", MLmetrics::MAPE(y.train.pred$V1, y.train))
+
+cat("\n\nNeural Network Accuracy - Test Set:")
+cat("\nMAE:", MLmetrics::MAE(y.test.pred$V1, y.test))
+cat("\nRMSE:", MLmetrics::RMSE(y.test.pred$V1, y.test))
+cat("\nMAPE:", MLmetrics::MAPE(y.test.pred$V1, y.test))
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=y.train.comp.df, aes(x=y.train.comp.df$date)) +
+geom_line(aes(y=y.train.comp.df$y_train, colour="Actual")) +
+geom_line(aes(y=y.train.comp.df$y_pred, colour="Predicted")) +
+xlab("Time") + ylab("Distance") + scale_y_continuous(labels=percent) + 
+scale_colour_manual(name="Legend", values = c("black", "#F8766D", "#E41A1C")) +
+ggtitle("Training Set - Neural Network - Actual vs Predicted Values")
+ggsave("train_nn.pdf", width=8, height=4)
+```
+```{r, fig.width=11, fig.height=4}
+ggplot(data=y.test.comp.df, aes(x=y.test.comp.df$date)) +
+geom_line(aes(y=y.test.comp.df$y_test, colour="Actual")) +
+geom_line(aes(y=y.test.comp.df$y_pred, colour="Predicted")) +
+xlab("Time") + ylab("Distance") + scale_y_continuous(labels=percent) + 
+scale_colour_manual(name="Legend", values = c("#377EB8", "#F8766D")) +
+ggtitle("Test Set - Neural Network - Actual vs Predicted Values")
+ggsave("test_nn.pdf", width=8, height=4)
+```
 ```{r}
 a <- c(2, 3, 4, 3, 3)
 b <- c(5, 4, 3, 4, 6)
@@ -232,7 +373,4 @@ hist.mean(div.prices.df$EEM, div.prices.df$GLD) - (2*hist.std(div.prices.df$EEM,
 
 spread(div.prices.df$GLD, div.prices.df$EEM) >= hist.mean(div.prices.df$GLD, div.prices.df$EEM) + (0.1*hist.std(div.prices.df$GLD, div.prices.df$EEM)) 
 spread(div.prices.df$GLD, div.prices.df$EEM) <= hist.mean(div.prices.df$GLD, div.prices.df$EEM) - (2*hist.std(div.prices.df$GLD, div.prices.df$EEM))
-```
-```{r}
-
 ```
