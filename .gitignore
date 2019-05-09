@@ -6,6 +6,7 @@ __pycache__/
 *.pdf
 .RData
 *.jpg
+*.png
 .directory
 
 .Rhistory
